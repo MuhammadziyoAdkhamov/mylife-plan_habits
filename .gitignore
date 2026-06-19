@@ -43,3 +43,35 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+# Flutter / Dart
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+build/
+
+# Android build cache
+android/.gradle/
+android/app/build/
+
+# iOS / macOS generated files
+ios/Flutter/Generated.xcconfig
+ios/Flutter/flutter_export_environment.sh
+ios/Pods/
+macos/Flutter/GeneratedPluginRegistrant.swift
+
+# IDE files
+.idea/
+.vscode/
+
+# Firebase config - public GitHub uchun yashiramiz
+android/app/google-services.json
+
+# Signing keys
+*.keystore
+*.jks
+key.properties
+
+# Logs
+*.log
+android/app/google-services.json
