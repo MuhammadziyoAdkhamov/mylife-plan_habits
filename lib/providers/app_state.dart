@@ -212,6 +212,17 @@ class AppState extends ChangeNotifier {
     await _saveAndNotify();
   }
 
+  Future deleteHabit(String habitId) async {
+    habits = habits.where((habit) => habit.id != habitId).toList();
+
+    xpHistory.removeWhere((item) => item.habitId == habitId);
+
+    _recalculateProfile();
+    _refreshBadges();
+
+    await _saveAndNotify();
+  }
+
   Future<void> toggleHabitToday(String habitId) async {
     final index = habits.indexWhere((habit) => habit.id == habitId);
     if (index == -1) return;
@@ -454,7 +465,8 @@ class AppState extends ChangeNotifier {
         .toList();
 
     badges = (data['badges'] as List<dynamic>? ?? [])
-        .map((item) => AppBadge.fromJson(Map<String, dynamic>.from(item as Map)))
+        .map(
+            (item) => AppBadge.fromJson(Map<String, dynamic>.from(item as Map)))
         .toList();
 
     xpHistory = (data['xpHistory'] as List<dynamic>? ?? [])
@@ -596,8 +608,7 @@ class AppState extends ChangeNotifier {
       return 'Internet aloqasini tekshir.';
     }
 
-    if (text.contains('ApiException: 10') ||
-        text.contains('DEVELOPER_ERROR')) {
+    if (text.contains('ApiException: 10') || text.contains('DEVELOPER_ERROR')) {
       return 'Google Auth sozlamasida SHA-1 yoki package name xato.';
     }
 
