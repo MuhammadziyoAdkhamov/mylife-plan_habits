@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
@@ -15,64 +16,100 @@ class OnboardingScreen extends StatefulWidget {
   State<OnboardingScreen> createState() => _OnboardingScreenState();
 }
 
-class _OnboardingScreenState extends State<OnboardingScreen> {
-  final PageController _controller = PageController();
+class _OnboardingScreenState extends State<OnboardingScreen>
+    with TickerProviderStateMixin {
+  final PageController _pageController = PageController();
+
+  late final AnimationController _backgroundController;
+  late final AnimationController _introController;
+
   int _page = 0;
 
   static const List<_OnboardingData> _pages = [
     _OnboardingData(
-      titleType: _OnboardingTitleType.welcome,
-      title: 'Welcome to',
-      message: 'A better you starts\nwith a better plan.',
-      visual: _OnboardingVisual.mountain,
-      buttonText: 'Get Started',
-      showAccountText: true,
-      showPlus: false,
+      badge: 'MYLife Plan',
+      title: 'Build your life system',
+      message:
+          'Katta o‘zgarish birdan emas, kichik odatlardan boshlanadi. Har kuni aniq reja bilan o‘s.',
+      icon: Icons.auto_awesome_rounded,
+      color: AppColors.primary,
     ),
     _OnboardingData(
-      titleType: _OnboardingTitleType.normal,
-      title: 'Small Steps,\nBig Changes',
+      badge: 'Daily Habits',
+      title: 'Track habits easily',
       message:
-          'We help you build good habits\nand break bad ones with\nscience-backed methods.',
-      visual: _OnboardingVisual.steps,
-      buttonText: 'Next',
-      showAccountText: false,
-      showPlus: true,
+          'Suv ichish, dars qilish, kitob o‘qish yoki sport — hammasini bitta joyda boshqar.',
+      icon: Icons.check_circle_rounded,
+      color: AppColors.emerald,
     ),
     _OnboardingData(
-      titleType: _OnboardingTitleType.normal,
-      title: 'Track. Improve.\nTransform.',
+      badge: 'XP & Streaks',
+      title: 'Stay motivated',
       message:
-          'Track your progress, earn XP,\nand become the best\nversion of yourself.',
-      visual: _OnboardingVisual.orb,
-      buttonText: 'Let\'s Go!',
-      showAccountText: false,
-      showPlus: true,
+          'XP yig‘, streak saqla, progressni ko‘r va o‘zingni har kuni kuchliroq his qil.',
+      icon: Icons.local_fire_department_rounded,
+      color: AppColors.gold,
+    ),
+    _OnboardingData(
+      badge: 'Cloud Sync',
+      title: 'Your progress is safe',
+      message:
+          'Google orqali kirsang ma’lumotlaring cloud’da saqlanadi. Guest rejimda esa tez boshlaysan.',
+      icon: Icons.cloud_done_rounded,
+      color: AppColors.cyan,
     ),
   ];
 
+  bool get _isLastPage => _page == _pages.length - 1;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _backgroundController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 6200),
+    )..repeat(reverse: true);
+
+    _introController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 950),
+    )..forward();
+  }
+
   @override
   void dispose() {
-    _controller.dispose();
+    _pageController.dispose();
+    _backgroundController.dispose();
+    _introController.dispose();
     super.dispose();
   }
 
+  Future<void> _completeAndGoLogin() async {
+    HapticFeedback.selectionClick();
+
+    await context.read<AppState>().completeOnboarding();
+
+    if (!mounted) return;
+    context.go('/login');
+  }
+
   Future<void> _next() async {
-    if (_page < _pages.length - 1) {
-      await _controller.nextPage(
-        duration: const Duration(milliseconds: 420),
+    HapticFeedback.lightImpact();
+
+    if (!_isLastPage) {
+      await _pageController.nextPage(
+        duration: const Duration(milliseconds: 460),
         curve: Curves.easeOutCubic,
       );
       return;
     }
 
-    await context.read<AppState>().completeOnboarding();
-    if (mounted) context.go('/login');
+    await _completeAndGoLogin();
   }
 
-  Future<void> _goLogin() async {
-    await context.read<AppState>().completeOnboarding();
-    if (mounted) context.go('/login');
+  Future<void> _skip() async {
+    await _completeAndGoLogin();
   }
 
   @override
@@ -81,156 +118,158 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
     return Scaffold(
       backgroundColor: const Color(0xFF020712),
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              Color(0xFF07122F),
-              Color(0xFF040817),
-              Color(0xFF02040B),
-            ],
-          ),
-        ),
-        child: SafeArea(
-          child: Stack(
-            children: [
-              Positioned.fill(
-                child: CustomPaint(
-                  painter: _OnboardingBackgroundPainter(),
+      body: SafeArea(
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final width = math.min(430.0, constraints.maxWidth);
+
+            return Stack(
+              children: [
+                _AnimatedOnboardingBackground(
+                  controller: _backgroundController,
+                  color: current.color,
                 ),
-              ),
-              Column(
-                children: [
-                  Expanded(
-                    child: PageView.builder(
-                      controller: _controller,
-                      physics: const BouncingScrollPhysics(),
-                      onPageChanged: (value) {
-                        setState(() => _page = value);
-                      },
-                      itemCount: _pages.length,
-                      itemBuilder: (context, index) {
-                        return _OnboardingPage(
-                          data: _pages[index],
-                          index: index,
-                          onPlusTap: _next,
-                        );
-                      },
-                    ),
-                  ),
-                  _PageDots(
-                    activeIndex: _page,
-                    count: 4,
-                  ),
-                  const SizedBox(height: 28),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 32),
-                    child: SizedBox(
-                      width: double.infinity,
-                      child: GradientButton(
-                        text: current.buttonText,
-                        height: 55,
-                        onPressed: _next,
-                      ),
-                    ),
-                  ),
-                  AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 220),
-                    child: current.showAccountText
-                        ? Padding(
-                            key: const ValueKey('account_text'),
-                            padding: const EdgeInsets.only(top: 13),
-                            child: TextButton(
-                              onPressed: _goLogin,
-                              style: TextButton.styleFrom(
-                                foregroundColor: Colors.white70,
-                                visualDensity: VisualDensity.compact,
-                              ),
-                              child: Text(
-                                'I already have an account',
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .bodySmall
-                                    ?.copyWith(
-                                      color: Colors.white.withOpacity(0.66),
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                              ),
-                            ),
-                          )
-                        : const SizedBox(
-                            key: ValueKey('empty_account_text'),
-                            height: 48,
+                Center(
+                  child: SizedBox(
+                    width: width,
+                    height: constraints.maxHeight,
+                    child: Column(
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
+                          child: _TopBar(
+                            currentPage: _page,
+                            totalPages: _pages.length,
+                            onSkip: _skip,
                           ),
+                        ),
+                        Expanded(
+                          child: PageView.builder(
+                            controller: _pageController,
+                            physics: const BouncingScrollPhysics(),
+                            itemCount: _pages.length,
+                            onPageChanged: (value) {
+                              setState(() => _page = value);
+                              _introController.forward(from: 0);
+                            },
+                            itemBuilder: (context, index) {
+                              return _OnboardingPage(
+                                data: _pages[index],
+                                controller: _introController,
+                                backgroundController: _backgroundController,
+                                pageIndex: index,
+                              );
+                            },
+                          ),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 20),
+                          child: _PageDots(
+                            activeIndex: _page,
+                            count: _pages.length,
+                          ),
+                        ),
+                        const SizedBox(height: 22),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 20),
+                          child: GradientButton(
+                            text: _isLastPage ? 'Get Started' : 'Continue',
+                            icon: _isLastPage
+                                ? Icons.rocket_launch_rounded
+                                : Icons.arrow_forward_rounded,
+                            height: 56,
+                            onPressed: _next,
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 220),
+                          child: _page == 0
+                              ? TextButton(
+                                  key: const ValueKey('account'),
+                                  onPressed: _completeAndGoLogin,
+                                  child: Text(
+                                    'I already have an account',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodySmall
+                                        ?.copyWith(
+                                          color: AppColors.textSecondary,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                  ),
+                                )
+                              : const SizedBox(
+                                  key: ValueKey('empty'),
+                                  height: 42,
+                                ),
+                        ),
+                        const SizedBox(height: 6),
+                      ],
+                    ),
                   ),
-                  const SizedBox(height: 8),
-                ],
-              ),
-            ],
-          ),
+                ),
+              ],
+            );
+          },
         ),
       ),
     );
   }
 }
 
-class _OnboardingPage extends StatelessWidget {
-  const _OnboardingPage({
-    required this.data,
-    required this.index,
-    required this.onPlusTap,
+class _TopBar extends StatelessWidget {
+  const _TopBar({
+    required this.currentPage,
+    required this.totalPages,
+    required this.onSkip,
   });
 
-  final _OnboardingData data;
-  final int index;
-  final VoidCallback onPlusTap;
+  final int currentPage;
+  final int totalPages;
+  final VoidCallback onSkip;
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
+    return Row(
       children: [
-        if (data.showPlus)
-          Positioned(
-            top: 14,
-            right: 20,
-            child: _SmallPlusButton(onTap: onPlusTap),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+          decoration: BoxDecoration(
+            color: AppColors.surface2.withOpacity(0.62),
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(
+              color: AppColors.borderSoft.withOpacity(0.75),
+            ),
           ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
-          child: Column(
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              SizedBox(height: data.showPlus ? 58 : 56),
-              _OnboardingTitle(data: data),
-              const SizedBox(height: 14),
-              Text(
-                data.message,
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Colors.white.withOpacity(0.74),
-                      fontSize: 14,
-                      height: 1.45,
-                      fontWeight: FontWeight.w400,
-                    ),
+              const Icon(
+                Icons.auto_awesome_rounded,
+                color: AppColors.cyan,
+                size: 17,
               ),
-              const SizedBox(height: 10),
-              Expanded(
-                child: RepaintBoundary(
-                  child: SizedBox.expand(
-                    child: CustomPaint(
-                      painter: switch (data.visual) {
-                        _OnboardingVisual.mountain =>
-                          _MountainIllustrationPainter(),
-                        _OnboardingVisual.steps => _StepsIllustrationPainter(),
-                        _OnboardingVisual.orb => _OrbIllustrationPainter(),
-                      },
+              const SizedBox(width: 7),
+              Text(
+                '${currentPage + 1}/$totalPages',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: AppColors.textSecondary,
+                      fontWeight: FontWeight.w800,
                     ),
-                  ),
-                ),
               ),
             ],
+          ),
+        ),
+        const Spacer(),
+        TextButton(
+          onPressed: onSkip,
+          child: Text(
+            'Skip',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: AppColors.textMuted,
+                  fontWeight: FontWeight.w800,
+                ),
           ),
         ),
       ],
@@ -238,87 +277,289 @@ class _OnboardingPage extends StatelessWidget {
   }
 }
 
-class _OnboardingTitle extends StatelessWidget {
-  const _OnboardingTitle({required this.data});
+class _OnboardingPage extends StatelessWidget {
+  const _OnboardingPage({
+    required this.data,
+    required this.controller,
+    required this.backgroundController,
+    required this.pageIndex,
+  });
 
   final _OnboardingData data;
+  final AnimationController controller;
+  final AnimationController backgroundController;
+  final int pageIndex;
 
   @override
   Widget build(BuildContext context) {
-    final baseStyle = Theme.of(context).textTheme.headlineMedium?.copyWith(
-              fontSize: 26,
-              height: 1.08,
-              fontWeight: FontWeight.w800,
-              letterSpacing: -0.4,
-              color: Colors.white,
-            ) ??
-        const TextStyle(
-          fontSize: 26,
-          height: 1.08,
-          fontWeight: FontWeight.w800,
-          color: Colors.white,
-        );
-
-    if (data.titleType == _OnboardingTitleType.welcome) {
-      return Column(
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
+      child: Column(
         children: [
-          Text(
-            'Welcome to',
-            textAlign: TextAlign.center,
-            style: baseStyle,
+          const SizedBox(height: 8),
+          _FadeSlide(
+            controller: controller,
+            start: 0.00,
+            end: 0.45,
+            offsetY: 18,
+            child: _Badge(
+              text: data.badge,
+              color: data.color,
+            ),
           ),
-          const SizedBox(height: 3),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              _GradientText(
-                'MYLife',
-                style: baseStyle.copyWith(fontSize: 27),
+          const SizedBox(height: 20),
+          _FadeSlide(
+            controller: controller,
+            start: 0.08,
+            end: 0.58,
+            offsetY: 24,
+            child: Text(
+              data.title,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.headlineLarge?.copyWith(
+                    color: AppColors.textPrimary,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: -1.1,
+                    height: 1.05,
+                  ),
+            ),
+          ),
+          const SizedBox(height: 14),
+          _FadeSlide(
+            controller: controller,
+            start: 0.16,
+            end: 0.68,
+            offsetY: 20,
+            child: Text(
+              data.message,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: AppColors.textSecondary,
+                    height: 1.45,
+                    fontWeight: FontWeight.w600,
+                  ),
+            ),
+          ),
+          const SizedBox(height: 22),
+          Expanded(
+            child: _FadeSlide(
+              controller: controller,
+              start: 0.24,
+              end: 0.86,
+              offsetY: 30,
+              child: _PremiumVisual(
+                data: data,
+                backgroundController: backgroundController,
+                pageIndex: pageIndex,
               ),
-              Text(
-                ' Plan',
-                style: baseStyle.copyWith(fontSize: 27),
-              ),
-            ],
+            ),
           ),
         ],
-      );
-    }
-
-    return Text(
-      data.title,
-      textAlign: TextAlign.center,
-      style: baseStyle,
+      ),
     );
   }
 }
 
-class _GradientText extends StatelessWidget {
-  const _GradientText(
-    this.text, {
-    required this.style,
+class _PremiumVisual extends StatelessWidget {
+  const _PremiumVisual({
+    required this.data,
+    required this.backgroundController,
+    required this.pageIndex,
   });
 
-  final String text;
-  final TextStyle style;
+  final _OnboardingData data;
+  final AnimationController backgroundController;
+  final int pageIndex;
 
   @override
   Widget build(BuildContext context) {
-    return ShaderMask(
-      shaderCallback: (bounds) {
-        return const LinearGradient(
-          begin: Alignment.centerLeft,
-          end: Alignment.centerRight,
-          colors: [
-            Color(0xFF22D3EE),
-            Color(0xFF4B6BFF),
-            Color(0xFF9B5CFF),
-          ],
-        ).createShader(bounds);
+    return AnimatedBuilder(
+      animation: backgroundController,
+      builder: (context, _) {
+        final t = backgroundController.value;
+        final floatY = math.sin(t * math.pi) * 10;
+        final rotate = math.sin(t * math.pi * 2) * 0.035;
+
+        return Transform.translate(
+          offset: Offset(0, -floatY),
+          child: Transform.rotate(
+            angle: rotate,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                Container(
+                  width: 250,
+                  height: 250,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: RadialGradient(
+                      colors: [
+                        data.color.withOpacity(0.38),
+                        data.color.withOpacity(0.10),
+                        Colors.transparent,
+                      ],
+                    ),
+                  ),
+                ),
+                Container(
+                  width: 190,
+                  height: 190,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: AppColors.surface.withOpacity(0.70),
+                    border: Border.all(
+                      color: data.color.withOpacity(0.38),
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: data.color.withOpacity(0.24),
+                        blurRadius: 55,
+                        offset: const Offset(0, 22),
+                      ),
+                    ],
+                  ),
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      CustomPaint(
+                        size: const Size(190, 190),
+                        painter: _OrbitPainter(
+                          color: data.color,
+                          progress: t,
+                          pageIndex: pageIndex,
+                        ),
+                      ),
+                      Container(
+                        width: 94,
+                        height: 94,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: [
+                              data.color,
+                              AppColors.cyan,
+                            ],
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: data.color.withOpacity(0.35),
+                              blurRadius: 32,
+                              offset: const Offset(0, 12),
+                            ),
+                          ],
+                        ),
+                        child: Icon(
+                          data.icon,
+                          color: Colors.white,
+                          size: 42,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const Positioned(
+                  top: 36,
+                  right: 42,
+                  child: _FloatingMiniChip(
+                    icon: Icons.bolt_rounded,
+                    text: '+XP',
+                    color: AppColors.gold,
+                  ),
+                ),
+                const Positioned(
+                  bottom: 48,
+                  left: 30,
+                  child: _FloatingMiniChip(
+                    icon: Icons.check_rounded,
+                    text: 'Done',
+                    color: AppColors.emerald,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
       },
+    );
+  }
+}
+
+class _FloatingMiniChip extends StatelessWidget {
+  const _FloatingMiniChip({
+    required this.icon,
+    required this.text,
+    required this.color,
+  });
+
+  final IconData icon;
+  final String text;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: AppColors.surface2.withOpacity(0.78),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: color.withOpacity(0.42),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: color.withOpacity(0.15),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: color, size: 16),
+          const SizedBox(width: 5),
+          Text(
+            text,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: AppColors.textSecondary,
+                  fontWeight: FontWeight.w900,
+                  fontSize: 11,
+                ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _Badge extends StatelessWidget {
+  const _Badge({
+    required this.text,
+    required this.color,
+  });
+
+  final String text;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: color.withOpacity(0.42),
+        ),
+      ),
       child: Text(
         text,
-        style: style.copyWith(color: Colors.white),
+        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: color,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 0.2,
+            ),
       ),
     );
   }
@@ -341,21 +582,20 @@ class _PageDots extends StatelessWidget {
         final active = index == activeIndex;
 
         return AnimatedContainer(
-          duration: const Duration(milliseconds: 250),
+          duration: const Duration(milliseconds: 260),
           curve: Curves.easeOutCubic,
-          width: active ? 13 : 7,
-          height: 6,
+          width: active ? 26 : 8,
+          height: 8,
           margin: const EdgeInsets.symmetric(horizontal: 4),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(99),
-            color: active
-                ? const Color(0xFF5B6CFF)
-                : Colors.white.withOpacity(0.18),
+            gradient: active ? AppColors.primaryGradient : null,
+            color: active ? null : AppColors.surface3,
             boxShadow: active
                 ? [
                     BoxShadow(
-                      color: const Color(0xFF5B6CFF).withOpacity(0.45),
-                      blurRadius: 12,
+                      color: AppColors.primary.withOpacity(0.35),
+                      blurRadius: 14,
                     ),
                   ]
                 : null,
@@ -366,132 +606,174 @@ class _PageDots extends StatelessWidget {
   }
 }
 
-class _SmallPlusButton extends StatefulWidget {
-  const _SmallPlusButton({required this.onTap});
+class _AnimatedOnboardingBackground extends StatelessWidget {
+  const _AnimatedOnboardingBackground({
+    required this.controller,
+    required this.color,
+  });
 
-  final VoidCallback onTap;
-
-  @override
-  State<_SmallPlusButton> createState() => _SmallPlusButtonState();
-}
-
-class _SmallPlusButtonState extends State<_SmallPlusButton> {
-  bool _pressed = false;
+  final AnimationController controller;
+  final Color color;
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTapDown: (_) => setState(() => _pressed = true),
-      onTapCancel: () => setState(() => _pressed = false),
-      onTapUp: (_) {
-        setState(() => _pressed = false);
-        widget.onTap();
-      },
-      child: AnimatedScale(
-        duration: const Duration(milliseconds: 130),
-        scale: _pressed ? 0.9 : 1,
-        child: Container(
-          width: 28,
-          height: 28,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            gradient: AppColors.primaryGradient,
-            boxShadow: [
-              BoxShadow(
-                color: AppColors.primary.withOpacity(0.42),
-                blurRadius: 20,
+    return IgnorePointer(
+      child: AnimatedBuilder(
+        animation: controller,
+        builder: (context, _) {
+          final t = controller.value;
+
+          return Stack(
+            children: [
+              const Positioned.fill(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        Color(0xFF07122F),
+                        Color(0xFF040817),
+                        Color(0xFF02040B),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              Positioned(
+                top: -120 + (t * 30),
+                right: -120 + (t * 22),
+                child: _Orb(
+                  size: 300,
+                  color: color,
+                  opacity: 0.24,
+                ),
+              ),
+              Positioned(
+                top: 260 - (t * 24),
+                left: -140,
+                child: const _Orb(
+                  size: 250,
+                  color: AppColors.cyan,
+                  opacity: 0.12,
+                ),
+              ),
+              Positioned(
+                bottom: -150 + (t * 32),
+                right: -110,
+                child: const _Orb(
+                  size: 270,
+                  color: AppColors.emerald,
+                  opacity: 0.10,
+                ),
+              ),
+              Positioned.fill(
+                child: CustomPaint(
+                  painter: _StarsPainter(),
+                ),
               ),
             ],
-          ),
-          child: const Icon(
-            Icons.add_rounded,
-            color: Colors.white,
-            size: 18,
-          ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _Orb extends StatelessWidget {
+  const _Orb({
+    required this.size,
+    required this.color,
+    required this.opacity,
+  });
+
+  final double size;
+  final Color color;
+  final double opacity;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: RadialGradient(
+          colors: [
+            color.withOpacity(opacity),
+            color.withOpacity(0),
+          ],
         ),
       ),
     );
   }
 }
 
-enum _OnboardingVisual {
-  mountain,
-  steps,
-  orb,
-}
-
-enum _OnboardingTitleType {
-  welcome,
-  normal,
-}
-
-class _OnboardingData {
-  const _OnboardingData({
-    required this.titleType,
-    required this.title,
-    required this.message,
-    required this.visual,
-    required this.buttonText,
-    required this.showAccountText,
-    required this.showPlus,
+class _OrbitPainter extends CustomPainter {
+  const _OrbitPainter({
+    required this.color,
+    required this.progress,
+    required this.pageIndex,
   });
 
-  final _OnboardingTitleType titleType;
-  final String title;
-  final String message;
-  final _OnboardingVisual visual;
-  final String buttonText;
-  final bool showAccountText;
-  final bool showPlus;
-}
+  final Color color;
+  final double progress;
+  final int pageIndex;
 
-class _OnboardingBackgroundPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
-    final bgPaint = Paint()
-      ..shader = const LinearGradient(
-        begin: Alignment.topCenter,
-        end: Alignment.bottomCenter,
-        colors: [
-          Color(0xFF061133),
-          Color(0xFF030817),
-          Color(0xFF02030A),
-        ],
-      ).createShader(Offset.zero & size);
+    final center = size.center(Offset.zero);
+    final radius = size.width * 0.36;
 
-    canvas.drawRect(Offset.zero & size, bgPaint);
+    final ringPaint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.4
+      ..color = color.withOpacity(0.30);
 
-    final topGlow = Paint()
-      ..shader = RadialGradient(
-        colors: [
-          const Color(0xFF4B6BFF).withOpacity(0.18),
-          Colors.transparent,
-        ],
-      ).createShader(
-        Rect.fromCircle(
-          center: Offset(size.width * 0.5, -40),
-          radius: size.width * 0.9,
-        ),
-      );
+    canvas.drawCircle(center, radius, ringPaint);
+    canvas.drawCircle(center, radius * 0.72, ringPaint);
 
-    canvas.drawCircle(
-      Offset(size.width * 0.5, -40),
-      size.width * 0.9,
-      topGlow,
+    final dotPaint = Paint()..color = color.withOpacity(0.95);
+    final secondDotPaint = Paint()..color = AppColors.cyan.withOpacity(0.90);
+
+    final angle = progress * math.pi * 2 + (pageIndex * 0.8);
+    final point = Offset(
+      center.dx + math.cos(angle) * radius,
+      center.dy + math.sin(angle) * radius,
     );
 
-    final starPaint = Paint()..color = Colors.white.withOpacity(0.72);
-    final blueStarPaint = Paint()..color = const Color(0xFF7C8DFF);
+    final secondPoint = Offset(
+      center.dx + math.cos(-angle) * radius * 0.72,
+      center.dy + math.sin(-angle) * radius * 0.72,
+    );
 
-    for (int i = 0; i < 44; i++) {
-      final dx = ((i * 41 + 19) % 100) / 100 * size.width;
-      final dy = ((i * 67 + 11) % 100) / 100 * size.height * 0.78;
-      final radius = i % 9 == 0 ? 1.55 : 0.82;
+    canvas.drawCircle(point, 4.2, dotPaint);
+    canvas.drawCircle(secondPoint, 3.4, secondDotPaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _OrbitPainter oldDelegate) {
+    return oldDelegate.progress != progress ||
+        oldDelegate.color != color ||
+        oldDelegate.pageIndex != pageIndex;
+  }
+}
+
+class _StarsPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final whitePaint = Paint()..color = Colors.white.withOpacity(0.55);
+    final bluePaint = Paint()..color = AppColors.cyan.withOpacity(0.52);
+
+    for (int i = 0; i < 48; i++) {
+      final dx = ((i * 43 + 17) % 100) / 100 * size.width;
+      final dy = ((i * 61 + 9) % 100) / 100 * size.height;
+      final radius = i % 9 == 0 ? 1.35 : 0.75;
 
       canvas.drawCircle(
         Offset(dx, dy),
         radius,
-        i % 7 == 0 ? blueStarPaint : starPaint,
+        i % 6 == 0 ? bluePaint : whitePaint,
       );
     }
   }
@@ -500,437 +782,61 @@ class _OnboardingBackgroundPainter extends CustomPainter {
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
-class _MountainIllustrationPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final w = size.width;
-    final h = size.height;
+class _FadeSlide extends StatelessWidget {
+  const _FadeSlide({
+    required this.controller,
+    required this.start,
+    required this.end,
+    required this.offsetY,
+    required this.child,
+  });
 
-    final skyGlow = Paint()
-      ..shader = RadialGradient(
-        colors: [
-          const Color(0xFFFF8A65).withOpacity(0.32),
-          const Color(0xFF8B5CF6).withOpacity(0.18),
-          Colors.transparent,
-        ],
-      ).createShader(
-        Rect.fromCircle(
-          center: Offset(w * 0.5, h * 0.58),
-          radius: w * 0.5,
-        ),
-      );
-
-    canvas.drawCircle(Offset(w * 0.5, h * 0.58), w * 0.5, skyGlow);
-
-    _drawStars(canvas, size);
-
-    final farMountains = Path()
-      ..moveTo(0, h * 0.72)
-      ..lineTo(w * 0.18, h * 0.54)
-      ..lineTo(w * 0.33, h * 0.66)
-      ..lineTo(w * 0.49, h * 0.47)
-      ..lineTo(w * 0.65, h * 0.66)
-      ..lineTo(w * 0.82, h * 0.51)
-      ..lineTo(w, h * 0.70)
-      ..lineTo(w, h)
-      ..lineTo(0, h)
-      ..close();
-
-    canvas.drawPath(
-      farMountains,
-      Paint()..color = const Color(0xFF35236B).withOpacity(0.85),
-    );
-
-    final midMountains = Path()
-      ..moveTo(0, h * 0.78)
-      ..lineTo(w * 0.20, h * 0.62)
-      ..lineTo(w * 0.38, h * 0.74)
-      ..lineTo(w * 0.58, h * 0.54)
-      ..lineTo(w * 0.77, h * 0.75)
-      ..lineTo(w, h * 0.61)
-      ..lineTo(w, h)
-      ..lineTo(0, h)
-      ..close();
-
-    canvas.drawPath(
-      midMountains,
-      Paint()..color = const Color(0xFF151C4A),
-    );
-
-    final frontMountains = Path()
-      ..moveTo(0, h * 0.88)
-      ..lineTo(w * 0.22, h * 0.72)
-      ..lineTo(w * 0.36, h * 0.84)
-      ..lineTo(w * 0.51, h * 0.61)
-      ..lineTo(w * 0.68, h * 0.84)
-      ..lineTo(w * 0.88, h * 0.71)
-      ..lineTo(w, h * 0.86)
-      ..lineTo(w, h)
-      ..lineTo(0, h)
-      ..close();
-
-    canvas.drawPath(
-      frontMountains,
-      Paint()..color = const Color(0xFF060B1E),
-    );
-
-    final peak = Offset(w * 0.50, h * 0.61);
-    _drawPersonWithFlag(canvas, peak);
-  }
-
-  void _drawStars(Canvas canvas, Size size) {
-    final paint = Paint()..color = Colors.white.withOpacity(0.72);
-
-    final stars = [
-      Offset(size.width * .17, size.height * .08),
-      Offset(size.width * .32, size.height * .20),
-      Offset(size.width * .73, size.height * .13),
-      Offset(size.width * .84, size.height * .29),
-      Offset(size.width * .55, size.height * .25),
-      Offset(size.width * .20, size.height * .37),
-    ];
-
-    for (final star in stars) {
-      canvas.drawCircle(star, 1.2, paint);
-    }
-
-    final crossPaint = Paint()
-      ..color = const Color(0xFFC9B6FF).withOpacity(0.9)
-      ..strokeWidth = 1.2
-      ..strokeCap = StrokeCap.round;
-
-    final center = Offset(size.width * .82, size.height * .09);
-    canvas.drawLine(
-      center.translate(-5, 0),
-      center.translate(5, 0),
-      crossPaint,
-    );
-    canvas.drawLine(
-      center.translate(0, -5),
-      center.translate(0, 5),
-      crossPaint,
-    );
-  }
-
-  void _drawPersonWithFlag(Canvas canvas, Offset base) {
-    final bodyPaint = Paint()
-      ..color = const Color(0xFFBFD7FF)
-      ..strokeWidth = 3
-      ..strokeCap = StrokeCap.round;
-
-    final darkPaint = Paint()
-      ..color = const Color(0xFF0E1A35)
-      ..strokeWidth = 4
-      ..strokeCap = StrokeCap.round;
-
-    final skinPaint = Paint()..color = const Color(0xFFFFD0A8);
-    final purplePaint = Paint()..color = const Color(0xFFB66BFF);
-
-    final head = base.translate(-5, -54);
-    canvas.drawCircle(head, 5, skinPaint);
-
-    canvas.drawLine(
-      base.translate(-4, -47),
-      base.translate(-5, -24),
-      bodyPaint,
-    );
-
-    canvas.drawLine(
-      base.translate(-5, -24),
-      base.translate(-17, -4),
-      darkPaint,
-    );
-    canvas.drawLine(
-      base.translate(-5, -24),
-      base.translate(8, -4),
-      darkPaint,
-    );
-
-    canvas.drawLine(
-      base.translate(-5, -40),
-      base.translate(-20, -31),
-      bodyPaint,
-    );
-
-    final polePaint = Paint()
-      ..color = Colors.white.withOpacity(0.85)
-      ..strokeWidth = 2
-      ..strokeCap = StrokeCap.round;
-
-    final poleBottom = base.translate(14, -5);
-    final poleTop = base.translate(14, -74);
-    canvas.drawLine(poleBottom, poleTop, polePaint);
-
-    final flag = Path()
-      ..moveTo(poleTop.dx, poleTop.dy + 3)
-      ..quadraticBezierTo(
-        poleTop.dx + 28,
-        poleTop.dy + 7,
-        poleTop.dx + 42,
-        poleTop.dy + 1,
-      )
-      ..lineTo(poleTop.dx + 38, poleTop.dy + 24)
-      ..quadraticBezierTo(
-        poleTop.dx + 20,
-        poleTop.dy + 18,
-        poleTop.dx,
-        poleTop.dy + 24,
-      )
-      ..close();
-
-    canvas.drawPath(flag, purplePaint);
-
-    final starPaint = Paint()..color = Colors.white.withOpacity(0.9);
-    final starCenter = poleTop.translate(22, 12);
-    canvas.drawCircle(starCenter, 3, starPaint);
-  }
+  final AnimationController controller;
+  final double start;
+  final double end;
+  final double offsetY;
+  final Widget child;
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  Widget build(BuildContext context) {
+    final animation = CurvedAnimation(
+      parent: controller,
+      curve: Interval(
+        start,
+        end,
+        curve: Curves.easeOutCubic,
+      ),
+    );
+
+    return AnimatedBuilder(
+      animation: animation,
+      builder: (context, _) {
+        final value = animation.value.clamp(0.0, 1.0).toDouble();
+
+        return Opacity(
+          opacity: value,
+          child: Transform.translate(
+            offset: Offset(0, offsetY * (1 - value)),
+            child: child,
+          ),
+        );
+      },
+    );
+  }
 }
 
-class _StepsIllustrationPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    _drawStars(canvas, size);
+class _OnboardingData {
+  const _OnboardingData({
+    required this.badge,
+    required this.title,
+    required this.message,
+    required this.icon,
+    required this.color,
+  });
 
-    final centerX = size.width * 0.52;
-
-    _drawStep(
-      canvas,
-      Offset(centerX - 42, size.height * 0.66),
-      116,
-      const Color(0xFF22D3EE),
-      const Color(0xFF4B6BFF),
-    );
-
-    _drawStep(
-      canvas,
-      Offset(centerX + 10, size.height * 0.51),
-      108,
-      const Color(0xFF4B6BFF),
-      const Color(0xFF8B5CF6),
-    );
-
-    _drawStep(
-      canvas,
-      Offset(centerX + 54, size.height * 0.37),
-      95,
-      const Color(0xFF8B5CF6),
-      const Color(0xFF7C5CFF),
-    );
-  }
-
-  void _drawStars(Canvas canvas, Size size) {
-    final starPaint = Paint()..color = Colors.white.withOpacity(0.75);
-    final violetPaint = Paint()..color = const Color(0xFF9B8CFF);
-
-    for (int i = 0; i < 28; i++) {
-      final dx = ((i * 53 + 9) % 100) / 100 * size.width;
-      final dy = ((i * 31 + 17) % 100) / 100 * size.height * 0.9;
-      canvas.drawCircle(
-        Offset(dx, dy),
-        i % 8 == 0 ? 1.7 : 0.9,
-        i % 5 == 0 ? violetPaint : starPaint,
-      );
-    }
-  }
-
-  void _drawStep(
-    Canvas canvas,
-    Offset center,
-    double width,
-    Color start,
-    Color end,
-  ) {
-    final top = Path()
-      ..moveTo(center.dx - width * 0.50, center.dy)
-      ..lineTo(center.dx - width * 0.08, center.dy - width * 0.17)
-      ..lineTo(center.dx + width * 0.50, center.dy + width * 0.03)
-      ..lineTo(center.dx + width * 0.05, center.dy + width * 0.22)
-      ..close();
-
-    final side = Path()
-      ..moveTo(center.dx - width * 0.50, center.dy)
-      ..lineTo(center.dx + width * 0.05, center.dy + width * 0.22)
-      ..lineTo(center.dx + width * 0.05, center.dy + width * 0.34)
-      ..lineTo(center.dx - width * 0.50, center.dy + width * 0.12)
-      ..close();
-
-    final front = Path()
-      ..moveTo(center.dx + width * 0.05, center.dy + width * 0.22)
-      ..lineTo(center.dx + width * 0.50, center.dy + width * 0.03)
-      ..lineTo(center.dx + width * 0.50, center.dy + width * 0.16)
-      ..lineTo(center.dx + width * 0.05, center.dy + width * 0.34)
-      ..close();
-
-    final glow = Paint()
-      ..shader = RadialGradient(
-        colors: [
-          start.withOpacity(0.45),
-          Colors.transparent,
-        ],
-      ).createShader(
-        Rect.fromCircle(
-          center: center.translate(0, width * 0.08),
-          radius: width * 0.72,
-        ),
-      );
-
-    canvas.drawCircle(center.translate(0, width * 0.08), width * 0.72, glow);
-
-    canvas.drawPath(
-      side,
-      Paint()..color = const Color(0xFF0B1535),
-    );
-
-    canvas.drawPath(
-      front,
-      Paint()..color = const Color(0xFF18245B),
-    );
-
-    canvas.drawPath(
-      top,
-      Paint()
-        ..shader = LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [start, end],
-        ).createShader(top.getBounds()),
-    );
-
-    canvas.drawPath(
-      top,
-      Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.2
-        ..color = Colors.white.withOpacity(0.18),
-    );
-
-    final shine = Paint()
-      ..color = Colors.white.withOpacity(0.62)
-      ..strokeWidth = 1.2
-      ..strokeCap = StrokeCap.round;
-
-    canvas.drawLine(
-      center.translate(-10, 2),
-      center.translate(14, -7),
-      shine,
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}
-
-class _OrbIllustrationPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    _drawStars(canvas, size);
-
-    final center = Offset(size.width * 0.5, size.height * 0.47);
-    final radius = math.min(size.width, size.height) * 0.22;
-
-    final outerGlow = Paint()
-      ..shader = RadialGradient(
-        colors: [
-          const Color(0xFF4B6BFF).withOpacity(0.52),
-          const Color(0xFF7C5CFF).withOpacity(0.18),
-          Colors.transparent,
-        ],
-      ).createShader(
-        Rect.fromCircle(center: center, radius: radius * 2.15),
-      );
-
-    canvas.drawCircle(center, radius * 2.15, outerGlow);
-
-    for (int i = 0; i < 4; i++) {
-      final ringPaint = Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = i == 1 ? 4 : 1.3
-        ..color = [
-          const Color(0xFF7C5CFF).withOpacity(0.55),
-          const Color(0xFF4B6BFF).withOpacity(0.9),
-          const Color(0xFF22D3EE).withOpacity(0.32),
-          Colors.white.withOpacity(0.12),
-        ][i];
-
-      canvas.drawCircle(center, radius + i * 15, ringPaint);
-    }
-
-    final starPath = _starPath(
-      center: center,
-      outerRadius: radius * 0.62,
-      innerRadius: radius * 0.20,
-      points: 4,
-    );
-
-    canvas.drawPath(
-      starPath,
-      Paint()
-        ..shader = const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            Color(0xFFFFFFFF),
-            Color(0xFF22D3EE),
-            Color(0xFF7C5CFF),
-          ],
-        ).createShader(starPath.getBounds()),
-    );
-
-    canvas.drawPath(
-      starPath,
-      Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.6
-        ..color = Colors.white.withOpacity(0.55),
-    );
-  }
-
-  void _drawStars(Canvas canvas, Size size) {
-    final starPaint = Paint()..color = Colors.white.withOpacity(0.75);
-    final bluePaint = Paint()..color = const Color(0xFF7C8DFF);
-
-    for (int i = 0; i < 26; i++) {
-      final dx = ((i * 47 + 23) % 100) / 100 * size.width;
-      final dy = ((i * 29 + 13) % 100) / 100 * size.height * 0.75;
-      canvas.drawCircle(
-        Offset(dx, dy),
-        i % 6 == 0 ? 1.5 : 0.8,
-        i % 4 == 0 ? bluePaint : starPaint,
-      );
-    }
-  }
-
-  Path _starPath({
-    required Offset center,
-    required double outerRadius,
-    required double innerRadius,
-    required int points,
-  }) {
-    final path = Path();
-    final total = points * 2;
-
-    for (int i = 0; i < total; i++) {
-      final angle = -math.pi / 2 + i * math.pi / points;
-      final radius = i.isEven ? outerRadius : innerRadius;
-      final point = Offset(
-        center.dx + math.cos(angle) * radius,
-        center.dy + math.sin(angle) * radius,
-      );
-
-      if (i == 0) {
-        path.moveTo(point.dx, point.dy);
-      } else {
-        path.lineTo(point.dx, point.dy);
-      }
-    }
-
-    path.close();
-    return path;
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  final String badge;
+  final String title;
+  final String message;
+  final IconData icon;
+  final Color color;
 }
